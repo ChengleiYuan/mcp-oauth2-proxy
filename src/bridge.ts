@@ -34,6 +34,7 @@ export class Bridge {
   private sessionId?: string;
   private serverStreamCtrl?: AbortController;
   private serverStreamRunning = false;
+  private serverStreamDisabled = false;
 
   constructor(private readonly opts: BridgeOptions) {}
 
@@ -209,7 +210,7 @@ export class Bridge {
   }
 
   private ensureServerStream(): void {
-    if (this.serverStreamRunning) return;
+    if (this.serverStreamDisabled || this.serverStreamRunning) return;
     this.serverStreamRunning = true;
     void this.runServerStream().finally(() => {
       this.serverStreamRunning = false;
@@ -233,7 +234,11 @@ export class Bridge {
           continue;
         }
         if (res.statusCode === 405 || res.statusCode === 404) {
-          this.opts.log.info({ status: res.statusCode }, 'upstream does not support server stream');
+          this.opts.log.info(
+            { status: res.statusCode },
+            'upstream does not support server stream; will not attempt again',
+          );
+          this.serverStreamDisabled = true;
           await res.body.dump();
           return;
         }
