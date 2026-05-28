@@ -1,0 +1,120 @@
+import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+
+const UpstreamSchema = z.object({
+  url: z.string().url(),
+  timeoutMs: z.number().int().positive().default(30_000),
+  openServerStream: z.boolean().default(true),
+  protocolVersion: z.string().optional(),
+});
+
+const BaseOAuthSchema = z.object({
+  tokenUrl: z.string().url().optional(),
+  clientId: z.string().min(1),
+  clientSecret: z.string().optional(),
+  scope: z.string().optional(),
+  audience: z.string().optional(),
+  authStyle: z.enum(['header', 'body']).default('body'),
+  refreshSkewSeconds: z.number().int().nonnegative().default(30),
+  extraParams: z.record(z.string()).optional(),
+});
+
+const ClientCredentialsSchema = BaseOAuthSchema.extend({
+  grant: z.literal('client_credentials'),
+});
+
+const AuthorizationCodeSchema = BaseOAuthSchema.extend({
+  grant: z.literal('authorization_code'),
+  authorizationCode: z.string().min(1).optional(),
+  redirectUri: z.string().url().optional(),
+  codeVerifier: z.string().min(1).optional(),
+  refreshToken: z.string().min(1).optional(),
+});
+
+const OAuthSchema = z.discriminatedUnion('grant', [
+  ClientCredentialsSchema,
+  AuthorizationCodeSchema,
+]);
+
+const DiscoverySchema = z
+  .object({
+    enabled: z.boolean().default(true),
+  })
+  .default({});
+
+const LogSchema = z.object({
+  level: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+});
+
+const ConfigSchema = z.object({
+  upstream: UpstreamSchema,
+  oauth2: OAuthSchema,
+  discovery: DiscoverySchema,
+  log: LogSchema.default({}),
+});
+
+export type Config = z.infer<typeof ConfigSchema>;
+export type OAuthConfig = z.infer<typeof OAuthSchema>;
+
+function applyEnvOverrides(raw: unknown): unknown {
+  if (typeof raw !== 'object' || raw === null) return raw;
+  const cfg = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
+  const oauth = (cfg.oauth2 ?? {}) as Record<string, unknown>;
+
+  const env = process.env;
+  if (env.OAUTH2_GRANT) oauth.grant = env.OAUTH2_GRANT;
+  if (env.OAUTH2_TOKEN_URL) oauth.tokenUrl = env.OAUTH2_TOKEN_URL;
+  if (env.OAUTH2_CLIENT_ID) oauth.clientId = env.OAUTH2_CLIENT_ID;
+  if (env.OAUTH2_CLIENT_SECRET) oauth.clientSecret = env.OAUTH2_CLIENT_SECRET;
+  if (env.OAUTH2_REFRESH_TOKEN) oauth.refreshToken = env.OAUTH2_REFRESH_TOKEN;
+  if (env.OAUTH2_AUTHORIZATION_CODE) oauth.authorizationCode = env.OAUTH2_AUTHORIZATION_CODE;
+  if (env.OAUTH2_CODE_VERIFIER) oauth.codeVerifier = env.OAUTH2_CODE_VERIFIER;
+  if (env.OAUTH2_REDIRECT_URI) oauth.redirectUri = env.OAUTH2_REDIRECT_URI;
+  if (env.OAUTH2_SCOPE) oauth.scope = env.OAUTH2_SCOPE;
+  if (env.OAUTH2_AUDIENCE) oauth.audience = env.OAUTH2_AUDIENCE;
+  if (env.OAUTH2_AUTH_STYLE) oauth.authStyle = env.OAUTH2_AUTH_STYLE;
+  if (env.OAUTH2_REFRESH_SKEW_SECONDS)
+    oauth.refreshSkewSeconds = Number(env.OAUTH2_REFRESH_SKEW_SECONDS);
+  if (env.OAUTH2_EXTRA_PARAMS) {
+    try {
+      oauth.extraParams = JSON.parse(env.OAUTH2_EXTRA_PARAMS);
+    } catch (err) {
+      throw new Error(`OAUTH2_EXTRA_PARAMS is not valid JSON: ${(err as Error).message}`);
+    }
+  }
+  cfg.oauth2 = oauth;
+
+  const upstream = (cfg.upstream ?? {}) as Record<string, unknown>;
+  if (env.UPSTREAM_URL) upstream.url = env.UPSTREAM_URL;
+  if (env.UPSTREAM_TIMEOUT_MS) upstream.timeoutMs = Number(env.UPSTREAM_TIMEOUT_MS);
+  if (env.UPSTREAM_PROTOCOL_VERSION) upstream.protocolVersion = env.UPSTREAM_PROTOCOL_VERSION;
+  if (env.UPSTREAM_OPEN_SERVER_STREAM)
+    upstream.openServerStream = parseBool(env.UPSTREAM_OPEN_SERVER_STREAM);
+  cfg.upstream = upstream;
+
+  const discovery = (cfg.discovery ?? {}) as Record<string, unknown>;
+  if (env.DISCOVERY_ENABLED !== undefined) discovery.enabled = parseBool(env.DISCOVERY_ENABLED);
+  cfg.discovery = discovery;
+
+  const log = (cfg.log ?? {}) as Record<string, unknown>;
+  if (env.LOG_LEVEL) log.level = env.LOG_LEVEL;
+  cfg.log = log;
+
+  return cfg;
+}
+
+function parseBool(v: string): boolean {
+  const s = v.trim().toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
+export function loadConfig(path?: string): Config {
+  const file = path ?? process.env.MCP_PROXY_CONFIG;
+  let raw: unknown = {};
+  if (file) {
+    const text = readFileSync(file, 'utf8');
+    raw = JSON.parse(text);
+  }
+  const merged = applyEnvOverrides(raw);
+  return ConfigSchema.parse(merged);
+}

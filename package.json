@@ -1,0 +1,53 @@
+{
+  "name": "mcp-oauth2-proxy",
+  "version": "0.1.0",
+  "description": "Local stdio MCP proxy to OAuth2-protected MCP servers (client_credentials, refresh_token, authorization_code+PKCE, password).",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-oauth2-proxy": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/index.ts",
+    "dev:once": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\""
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "oauth2",
+    "proxy",
+    "stdio"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "pino": "^9.5.0",
+    "undici": "^6.21.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.16.0",
+    "@typescript-eslint/parser": "^8.16.0",
+    "eslint": "^9.16.0",
+    "prettier": "^3.4.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.6"
+  }
+}

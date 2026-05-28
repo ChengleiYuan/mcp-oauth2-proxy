@@ -1,0 +1,18 @@
+{
+  "upstream": {
+    "url": "https://mcp.example.com/mcp",
+    "timeoutMs": 30000,
+    "openServerStream": true
+  },
+  "oauth2": {
+    "grant": "client_credentials",
+    "tokenUrl": "https://idp.example.com/oauth2/token",
+    "clientId": "my-client",
+    "clientSecret": "set-via-OAUTH2_CLIENT_SECRET",
+    "scope": "mcp:read mcp:write",
+    "audience": "https://mcp.example.com",
+    "authStyle": "body",
+    "refreshSkewSeconds": 30
+  },
+  "log": { "level": "info" }
+}
