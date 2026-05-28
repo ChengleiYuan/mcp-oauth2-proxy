@@ -218,7 +218,17 @@ export class Bridge {
   }
 
   private async runServerStream(): Promise<void> {
+    const maxRetries = 10;
+    let retries = 0;
     while (true) {
+      if (retries >= maxRetries) {
+        this.opts.log.warn(
+          { retries },
+          'server-stream exceeded max retries; will not attempt again',
+        );
+        this.serverStreamDisabled = true;
+        return;
+      }
       this.serverStreamCtrl = new AbortController();
       try {
         const headers = await this.buildHeaders({ accept: 'text/event-stream' });
@@ -231,6 +241,7 @@ export class Bridge {
           this.opts.log.warn('server-stream 401, refreshing token');
           await res.body.dump();
           this.opts.tokenManager.invalidate();
+          retries++;
           continue;
         }
         if (res.statusCode === 405 || res.statusCode === 404) {
@@ -245,6 +256,7 @@ export class Bridge {
         if (res.statusCode < 200 || res.statusCode >= 300) {
           this.opts.log.warn({ status: res.statusCode }, 'server-stream error; reconnecting');
           await res.body.dump();
+          retries++;
           await sleep(1000);
           continue;
         }
@@ -253,11 +265,13 @@ export class Bridge {
           await res.body.dump();
           return;
         }
+        retries = 0;
         await this.consumeSse(res.body);
         await sleep(500);
       } catch (err) {
         if ((err as { name?: string }).name === 'AbortError') return;
         this.opts.log.warn({ err }, 'server-stream connection error; backing off');
+        retries++;
         await sleep(2000);
       }
     }
