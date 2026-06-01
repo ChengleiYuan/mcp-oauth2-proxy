@@ -79,15 +79,22 @@ function applyEnvOverrides(raw: unknown): unknown {
   if (env.OAUTH2_REDIRECT_URI) oauth.redirectUri = env.OAUTH2_REDIRECT_URI;
   if (env.OAUTH2_INTERACTIVE !== undefined) oauth.interactive = parseBool(env.OAUTH2_INTERACTIVE);
   if (env.OAUTH2_CALLBACK_HOST) oauth.callbackHost = env.OAUTH2_CALLBACK_HOST;
-  if (env.OAUTH2_CALLBACK_PORT) oauth.callbackPort = Number(env.OAUTH2_CALLBACK_PORT);
+  if (env.OAUTH2_CALLBACK_PORT)
+    oauth.callbackPort = parseIntEnv('OAUTH2_CALLBACK_PORT', env.OAUTH2_CALLBACK_PORT);
   if (env.OAUTH2_CALLBACK_TIMEOUT_SECONDS)
-    oauth.callbackTimeoutSeconds = Number(env.OAUTH2_CALLBACK_TIMEOUT_SECONDS);
+    oauth.callbackTimeoutSeconds = parseIntEnv(
+      'OAUTH2_CALLBACK_TIMEOUT_SECONDS',
+      env.OAUTH2_CALLBACK_TIMEOUT_SECONDS,
+    );
   if (env.OAUTH2_TOKEN_CACHE_DIR) oauth.tokenCacheDir = env.OAUTH2_TOKEN_CACHE_DIR;
   if (env.OAUTH2_SCOPE) oauth.scope = env.OAUTH2_SCOPE;
   if (env.OAUTH2_AUDIENCE) oauth.audience = env.OAUTH2_AUDIENCE;
   if (env.OAUTH2_AUTH_STYLE) oauth.authStyle = env.OAUTH2_AUTH_STYLE;
   if (env.OAUTH2_REFRESH_SKEW_SECONDS)
-    oauth.refreshSkewSeconds = Number(env.OAUTH2_REFRESH_SKEW_SECONDS);
+    oauth.refreshSkewSeconds = parseIntEnv(
+      'OAUTH2_REFRESH_SKEW_SECONDS',
+      env.OAUTH2_REFRESH_SKEW_SECONDS,
+    );
   if (env.OAUTH2_EXTRA_PARAMS) {
     try {
       oauth.extraParams = JSON.parse(env.OAUTH2_EXTRA_PARAMS);
@@ -99,7 +106,8 @@ function applyEnvOverrides(raw: unknown): unknown {
 
   const upstream = (cfg.upstream ?? {}) as Record<string, unknown>;
   if (env.UPSTREAM_URL) upstream.url = env.UPSTREAM_URL;
-  if (env.UPSTREAM_TIMEOUT_MS) upstream.timeoutMs = Number(env.UPSTREAM_TIMEOUT_MS);
+  if (env.UPSTREAM_TIMEOUT_MS)
+    upstream.timeoutMs = parseIntEnv('UPSTREAM_TIMEOUT_MS', env.UPSTREAM_TIMEOUT_MS);
   if (env.UPSTREAM_PROTOCOL_VERSION) upstream.protocolVersion = env.UPSTREAM_PROTOCOL_VERSION;
   if (env.UPSTREAM_OPEN_SERVER_STREAM)
     upstream.openServerStream = parseBool(env.UPSTREAM_OPEN_SERVER_STREAM);
@@ -119,6 +127,18 @@ function applyEnvOverrides(raw: unknown): unknown {
 function parseBool(v: string): boolean {
   const s = v.trim().toLowerCase();
   return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+}
+
+function parseIntEnv(name: string, raw: string): number {
+  const trimmed = raw.trim();
+  if (trimmed === '' || !/^-?\d+$/.test(trimmed)) {
+    throw new Error(`${name} must be an integer, got "${raw}"`);
+  }
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || !Number.isSafeInteger(n)) {
+    throw new Error(`${name} is out of range: "${raw}"`);
+  }
+  return n;
 }
 
 export function loadConfig(path?: string): Config {
