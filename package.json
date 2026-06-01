@@ -1,7 +1,7 @@
 
 {
   "name": "mcp-oauth2-proxy",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Local stdio MCP proxy to OAuth2-protected MCP servers (client_credentials, authorization_code+PKCE).",
   "type": "module",
   "main": "dist/index.js",
