@@ -437,6 +437,38 @@ npx @modelcontextprotocol/inspector \
 - mTLS / JWT-bearer / device-code / ROPC grants
 - HTTP / SSE inbound transport (this is a stdio MCP server)
 
+## Releases
+
+Releases are fully automated via
+[release-please](https://github.com/googleapis/release-please) and
+**Conventional Commits**.
+
+1. Every PR title must follow Conventional Commits
+   (`feat: …`, `fix: …`, `docs: …`, `chore: …`, …). A `PR Title Lint`
+   check enforces this on every PR.
+2. PRs are **squash-merged** so the PR title becomes the commit message
+   on `main`.
+3. On each push to `main`, a "Release PR" is opened / updated by
+   release-please that bumps `package.json` and updates `CHANGELOG.md`.
+4. Merging the Release PR creates a `vX.Y.Z` tag + GitHub Release.
+5. The `Publish to npm` workflow fires on the new tag and publishes via
+   npm OIDC trusted publishing — no `NPM_TOKEN` secret is used.
+
+Bump rules (pre-1.0, with `bump-minor-pre-major: true`):
+
+| Commit prefix          | Bump   |
+|------------------------|--------|
+| `fix:`                 | patch  |
+| `feat:`                | minor  |
+| `feat!:` / `BREAKING CHANGE:` footer | minor (until 1.0.0, then major) |
+| `docs:` / `chore:` / `refactor:` / `test:` / `ci:` / `build:` / `perf:` | no release |
+
+Required repo settings (one-time):
+
+- Default merge strategy: **Squash and merge**.
+- Settings → Actions → General → **Allow GitHub Actions to create and
+  approve pull requests** = on.
+
 ## License
 
 [MIT](./LICENSE)
