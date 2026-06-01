@@ -190,21 +190,29 @@ function waitForListening(server: Server): Promise<void> {
 
 function openBrowser(url: string): void {
   const plat = platform();
+  let cmd: string;
+  let args: string[];
   if (plat === 'win32') {
     // Avoid `cmd /c start` — `&` in the URL is a cmd command separator
     // even inside quotes. rundll32 hands the URL straight to the shell's
     // URL protocol handler with no further parsing.
-    spawn('rundll32', ['url.dll,FileProtocolHandler', url], {
-      detached: true,
-      stdio: 'ignore',
-    }).unref();
-    return;
+    cmd = 'rundll32';
+    args = ['url.dll,FileProtocolHandler', url];
+  } else if (plat === 'darwin') {
+    cmd = 'open';
+    args = [url];
+  } else {
+    cmd = 'xdg-open';
+    args = [url];
   }
-  if (plat === 'darwin') {
-    spawn('open', [url], { detached: true, stdio: 'ignore' }).unref();
-    return;
-  }
-  spawn('xdg-open', [url], { detached: true, stdio: 'ignore' }).unref();
+  const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+  // If the opener binary is missing (e.g. headless Linux without xdg-utils)
+  // Node emits an 'error' event that becomes an uncaught exception unless
+  // we attach a handler. The user can still copy the URL printed to stderr.
+  child.on('error', () => {
+    /* swallowed; caller already logged the URL */
+  });
+  child.unref();
 }
 
 function respondHtml(res: ServerResponse, status: number, heading: string, body: string): void {
