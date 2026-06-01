@@ -36,6 +36,14 @@
     "stdio"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChengleiYuan/mcp-oauth2-proxy.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues"
+  },
+  "homepage": "https://github.com/ChengleiYuan/mcp-oauth2-proxy#readme",
   "dependencies": {
     "pino": "^9.5.0",
     "undici": "^6.21.0",
