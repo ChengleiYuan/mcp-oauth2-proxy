@@ -191,8 +191,13 @@ function waitForListening(server: Server): Promise<void> {
 function openBrowser(url: string): void {
   const plat = platform();
   if (plat === 'win32') {
-    // start "" "url" — through cmd so URLs with & are quoted correctly
-    spawn('cmd', ['/c', 'start', '""', url], { detached: true, stdio: 'ignore' }).unref();
+    // Avoid `cmd /c start` — `&` in the URL is a cmd command separator
+    // even inside quotes. rundll32 hands the URL straight to the shell's
+    // URL protocol handler with no further parsing.
+    spawn('rundll32', ['url.dll,FileProtocolHandler', url], {
+      detached: true,
+      stdio: 'ignore',
+    }).unref();
     return;
   }
   if (plat === 'darwin') {
