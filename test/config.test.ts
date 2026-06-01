@@ -23,6 +23,8 @@ const ENV_KEYS = [
   'OAUTH2_AUDIENCE',
   'OAUTH2_AUTH_STYLE',
   'OAUTH2_REFRESH_SKEW_SECONDS',
+  'OAUTH2_CALLBACK_PORT',
+  'OAUTH2_CALLBACK_TIMEOUT_SECONDS',
   'OAUTH2_EXTRA_PARAMS',
   'DISCOVERY_ENABLED',
 ] as const;
@@ -109,5 +111,23 @@ describe('loadConfig', () => {
 
   it('reports a clear zod error when required fields are missing', () => {
     expect(() => loadConfig()).toThrow();
+  });
+
+  it('throws a clear error when OAUTH2_CALLBACK_PORT is not an integer', () => {
+    process.env.UPSTREAM_URL = 'https://mcp.example.com/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'https://idp.example.com/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    process.env.OAUTH2_CALLBACK_PORT = '53683x';
+    expect(() => loadConfig()).toThrow(/OAUTH2_CALLBACK_PORT must be an integer/);
+  });
+
+  it('throws a clear error when UPSTREAM_TIMEOUT_MS is empty', () => {
+    process.env.UPSTREAM_URL = 'https://mcp.example.com/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'https://idp.example.com/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    process.env.UPSTREAM_TIMEOUT_MS = '  ';
+    expect(() => loadConfig()).toThrow(/UPSTREAM_TIMEOUT_MS must be an integer/);
   });
 });
