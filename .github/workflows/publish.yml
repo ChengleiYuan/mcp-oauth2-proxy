@@ -56,5 +56,4 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public --provenance --tag "${TAG:-latest}"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           TAG: ${{ inputs.tag }}
