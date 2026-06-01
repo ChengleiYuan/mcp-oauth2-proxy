@@ -19,6 +19,10 @@ on:
         type: string
         required: false
         default: 'latest'
+    secrets:
+      NPM_TOKEN:
+        description: 'npm token fallback for repositories not configured for OIDC trusted publishing'
+        required: false
 
 permissions:
   contents: read
@@ -63,7 +67,13 @@ jobs:
             exit 1
           fi
 
-      - name: Publish to npm (OIDC trusted publishing)
-        run: npm publish --access public --tag "${TAG:-latest}"
+      - name: Publish to npm
+        run: |
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            npm publish --access public --tag "${TAG:-latest}"
+          else
+            npm publish --provenance --access public --tag "${TAG:-latest}"
+          fi
         env:
           TAG: ${{ inputs.tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
