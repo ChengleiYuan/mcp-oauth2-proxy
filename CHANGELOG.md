@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.8](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.7...v0.1.8) (2026-06-01)
+
+
+### Miscellaneous
+
+* release 0.1.8
+
 ## [0.1.7](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.6...v0.1.7) (2026-06-01)
 
 
