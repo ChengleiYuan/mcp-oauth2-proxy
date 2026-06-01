@@ -12,6 +12,13 @@ on:
         description: 'npm dist-tag (e.g. latest, next, beta)'
         required: false
         default: 'latest'
+  workflow_call:
+    inputs:
+      tag:
+        description: 'npm dist-tag'
+        type: string
+        required: false
+        default: 'latest'
 
 permissions:
   contents: read
@@ -45,14 +52,14 @@ jobs:
         run: npm run build
 
       - name: Verify package version matches tag
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_call'
         run: |
           PKG_VERSION="v$(node -p "require('./package.json').version")"
-          TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          REF="${GITHUB_REF#refs/tags/}"
           echo "Package version: $PKG_VERSION"
-          echo "Tag version:     $TAG_VERSION"
-          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
-            echo "::error::Tag ($TAG_VERSION) does not match package.json version ($PKG_VERSION)"
+          echo "Ref:             $REF"
+          if [ "${REF#v}" != "${REF}" ] && [ "$PKG_VERSION" != "$REF" ]; then
+            echo "::error::Tag ($REF) does not match package.json version ($PKG_VERSION)"
             exit 1
           fi
 
