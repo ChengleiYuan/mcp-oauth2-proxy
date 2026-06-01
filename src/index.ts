@@ -75,6 +75,19 @@ async function main(): Promise<void> {
     refreshSkewSeconds: cfg.oauth2.refreshSkewSeconds,
     log,
   });
+
+  // Prefetch a token at startup so the interactive authorization_code
+  // browser flow opens immediately, instead of waiting for the first
+  // stdin JSON-RPC message to lazily trigger it.
+  try {
+    log.info('prefetching initial oauth2 token');
+    await tokenManager.getToken();
+    log.info('initial oauth2 token acquired');
+  } catch (err) {
+    process.stderr.write(`failed to acquire initial oauth2 token: ${(err as Error).message}\n`);
+    process.exit(2);
+  }
+
   const codec = new StdioCodec(process.stdin, process.stdout);
   const bridge = new Bridge({
     upstreamUrl: cfg.upstream.url,
