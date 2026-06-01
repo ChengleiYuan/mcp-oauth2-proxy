@@ -1,6 +1,8 @@
 import type { Grant, OAuthHttpClient, TokenResponse } from './types.js';
 import { applyClientAuth, parseTokenResponse } from '../http.js';
 import { RefreshTokenGrant } from './refreshToken.js';
+import { runInteractiveAuth, type InteractiveAuthResult } from '../interactive.js';
+import type { Logger } from '../../log.js';
 
 export interface AuthorizationCodeOptions {
   tokenUrl: string;
@@ -13,13 +15,28 @@ export interface AuthorizationCodeOptions {
   scope?: string;
   initialRefreshToken?: string;
   extraParams?: Record<string, string>;
+
+  authorizationUrl?: string;
+  interactive: boolean;
+  callbackHost: string;
+  callbackPort: number;
+  callbackTimeoutSeconds: number;
+
+  log: Logger;
+  onRefreshTokenUpdated?: (refreshToken: string) => void;
+  runInteractive?: typeof runInteractiveAuth;
 }
 
 /**
- * v1 implementation: operator pre-supplies either an authorization_code (one-shot
- * exchange) or a refresh_token. On first call, if a refresh token is configured
- * we delegate to RefreshTokenGrant; otherwise we exchange the code once and then
- * use the returned refresh_token for subsequent renewals.
+ * Acquires tokens via OAuth2 authorization_code with PKCE.
+ *
+ * Three input modes (resolved lazily on first fetchToken):
+ *   1. A pre-existing refresh token (delegate immediately).
+ *   2. A pre-supplied one-shot authorization_code (exchange once, then
+ *      delegate to RefreshTokenGrant if the IdP returned a refresh_token).
+ *   3. Interactive browser-based login: open authorizationUrl, capture the
+ *      code on a local callback listener, exchange it, persist the refresh
+ *      token via onRefreshTokenUpdated.
  */
 export class AuthorizationCodeGrant implements Grant {
   readonly name = 'authorization_code';
@@ -31,22 +48,7 @@ export class AuthorizationCodeGrant implements Grant {
     private readonly http: OAuthHttpClient,
   ) {
     if (opts.initialRefreshToken) {
-      this.delegate = new RefreshTokenGrant(
-        {
-          tokenUrl: opts.tokenUrl,
-          clientId: opts.clientId,
-          clientSecret: opts.clientSecret,
-          authStyle: opts.authStyle,
-          scope: opts.scope,
-          initialRefreshToken: opts.initialRefreshToken,
-          extraParams: opts.extraParams,
-        },
-        http,
-      );
-    } else if (!opts.authorizationCode) {
-      throw new Error(
-        'authorization_code grant requires either "authorizationCode" or a pre-existing "refreshToken"',
-      );
+      this.delegate = this.buildDelegate(opts.initialRefreshToken);
     }
   }
 
@@ -57,17 +59,48 @@ export class AuthorizationCodeGrant implements Grant {
   async fetchToken(): Promise<TokenResponse> {
     if (this.delegate) return this.delegate.fetchToken();
 
-    if (this.codeUsed) {
-      throw new Error(
-        'authorization_code already consumed and no refresh_token was returned; reconfigure with a new code or a refresh token',
-      );
+    let code = this.opts.authorizationCode;
+    let codeVerifier = this.opts.codeVerifier;
+    let redirectUri = this.opts.redirectUri;
+
+    if (!code) {
+      if (this.codeUsed) {
+        throw new Error(
+          'authorization_code already consumed and no refresh_token was returned; reconfigure with a new code or a refresh token',
+        );
+      }
+      if (!this.opts.interactive) {
+        throw new Error(
+          'authorization_code grant requires "authorizationCode", a pre-existing "refreshToken", or interactive=true with an authorizationUrl',
+        );
+      }
+      if (!this.opts.authorizationUrl) {
+        throw new Error(
+          'interactive authorization_code flow requires an authorizationUrl (set OAUTH2_AUTHORIZATION_URL or enable discovery)',
+        );
+      }
+      const runner = this.opts.runInteractive ?? runInteractiveAuth;
+      const result: InteractiveAuthResult = await runner({
+        authorizationUrl: this.opts.authorizationUrl,
+        clientId: this.opts.clientId,
+        scope: this.opts.scope,
+        callbackHost: this.opts.callbackHost,
+        callbackPort: this.opts.callbackPort,
+        callbackTimeoutSeconds: this.opts.callbackTimeoutSeconds,
+        redirectUri: this.opts.redirectUri,
+        extraParams: this.opts.extraParams,
+        log: this.opts.log,
+      });
+      code = result.code;
+      codeVerifier = result.codeVerifier;
+      redirectUri = result.redirectUri;
     }
 
     const body = new URLSearchParams();
     body.set('grant_type', 'authorization_code');
-    body.set('code', this.opts.authorizationCode!);
-    if (this.opts.redirectUri) body.set('redirect_uri', this.opts.redirectUri);
-    if (this.opts.codeVerifier) body.set('code_verifier', this.opts.codeVerifier);
+    body.set('code', code);
+    if (redirectUri) body.set('redirect_uri', redirectUri);
+    if (codeVerifier) body.set('code_verifier', codeVerifier);
     if (this.opts.extraParams) {
       for (const [k, v] of Object.entries(this.opts.extraParams)) body.set(k, v);
     }
@@ -83,19 +116,25 @@ export class AuthorizationCodeGrant implements Grant {
     this.codeUsed = true;
 
     if (tok.refreshToken) {
-      this.delegate = new RefreshTokenGrant(
-        {
-          tokenUrl: this.opts.tokenUrl,
-          clientId: this.opts.clientId,
-          clientSecret: this.opts.clientSecret,
-          authStyle: this.opts.authStyle,
-          scope: this.opts.scope,
-          initialRefreshToken: tok.refreshToken,
-          extraParams: this.opts.extraParams,
-        },
-        this.http,
-      );
+      this.opts.onRefreshTokenUpdated?.(tok.refreshToken);
+      this.delegate = this.buildDelegate(tok.refreshToken);
     }
     return tok;
+  }
+
+  private buildDelegate(refreshToken: string): RefreshTokenGrant {
+    return new RefreshTokenGrant(
+      {
+        tokenUrl: this.opts.tokenUrl,
+        clientId: this.opts.clientId,
+        clientSecret: this.opts.clientSecret,
+        authStyle: this.opts.authStyle,
+        scope: this.opts.scope,
+        initialRefreshToken: refreshToken,
+        extraParams: this.opts.extraParams,
+        onRefreshTokenUpdated: this.opts.onRefreshTokenUpdated,
+      },
+      this.http,
+    );
   }
 }

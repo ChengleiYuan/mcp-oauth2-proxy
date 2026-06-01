@@ -26,9 +26,15 @@ const ClientCredentialsSchema = BaseOAuthSchema.extend({
 const AuthorizationCodeSchema = BaseOAuthSchema.extend({
   grant: z.literal('authorization_code'),
   authorizationCode: z.string().min(1).optional(),
+  authorizationUrl: z.string().url().optional(),
   redirectUri: z.string().url().optional(),
   codeVerifier: z.string().min(1).optional(),
   refreshToken: z.string().min(1).optional(),
+  interactive: z.boolean().default(true),
+  callbackHost: z.string().min(1).default('127.0.0.1'),
+  callbackPort: z.number().int().min(0).max(65535).default(53682),
+  callbackTimeoutSeconds: z.number().int().positive().default(300),
+  tokenCacheDir: z.string().min(1).optional(),
 });
 
 const OAuthSchema = z.discriminatedUnion('grant', [
@@ -68,8 +74,15 @@ function applyEnvOverrides(raw: unknown): unknown {
   if (env.OAUTH2_CLIENT_SECRET) oauth.clientSecret = env.OAUTH2_CLIENT_SECRET;
   if (env.OAUTH2_REFRESH_TOKEN) oauth.refreshToken = env.OAUTH2_REFRESH_TOKEN;
   if (env.OAUTH2_AUTHORIZATION_CODE) oauth.authorizationCode = env.OAUTH2_AUTHORIZATION_CODE;
+  if (env.OAUTH2_AUTHORIZATION_URL) oauth.authorizationUrl = env.OAUTH2_AUTHORIZATION_URL;
   if (env.OAUTH2_CODE_VERIFIER) oauth.codeVerifier = env.OAUTH2_CODE_VERIFIER;
   if (env.OAUTH2_REDIRECT_URI) oauth.redirectUri = env.OAUTH2_REDIRECT_URI;
+  if (env.OAUTH2_INTERACTIVE !== undefined) oauth.interactive = parseBool(env.OAUTH2_INTERACTIVE);
+  if (env.OAUTH2_CALLBACK_HOST) oauth.callbackHost = env.OAUTH2_CALLBACK_HOST;
+  if (env.OAUTH2_CALLBACK_PORT) oauth.callbackPort = Number(env.OAUTH2_CALLBACK_PORT);
+  if (env.OAUTH2_CALLBACK_TIMEOUT_SECONDS)
+    oauth.callbackTimeoutSeconds = Number(env.OAUTH2_CALLBACK_TIMEOUT_SECONDS);
+  if (env.OAUTH2_TOKEN_CACHE_DIR) oauth.tokenCacheDir = env.OAUTH2_TOKEN_CACHE_DIR;
   if (env.OAUTH2_SCOPE) oauth.scope = env.OAUTH2_SCOPE;
   if (env.OAUTH2_AUDIENCE) oauth.audience = env.OAUTH2_AUDIENCE;
   if (env.OAUTH2_AUTH_STYLE) oauth.authStyle = env.OAUTH2_AUTH_STYLE;

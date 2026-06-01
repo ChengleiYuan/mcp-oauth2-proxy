@@ -13,8 +13,8 @@ Supported OAuth2 grants:
 
 - `client_credentials`
 - `refresh_token`
-- `authorization_code` (with PKCE; operator pre-supplies the code or a
-  refresh token — no interactive browser flow)
+- `authorization_code` (with PKCE; interactive browser login by default,
+  or operator pre-supplies the code / a refresh token)
 - `password` (Resource Owner Password Credentials)
 
 ## Topology
@@ -197,11 +197,44 @@ See [`config.example.json`](./config.example.json).
 | Grant                | Additional required / optional fields                                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `client_credentials` | —                                                                                                                                     |
-| `authorization_code` | Either `authorizationCode` (one-shot exchange; optional `redirectUri`, `codeVerifier`) **or** `refreshToken`                          |
+| `authorization_code` | One of: `refreshToken` · `authorizationCode` (one-shot; optional `redirectUri`, `codeVerifier`) · **interactive browser login** (default; needs `authorizationUrl` from discovery or `OAUTH2_AUTHORIZATION_URL`) |
 
-For `authorization_code`: the proxy does **not** drive an interactive
-browser flow. You either pre-exchange a code (in which case the returned
-`refresh_token` is used for renewals) or pre-provision a refresh token.
+For `authorization_code` the proxy supports three input modes, resolved
+on first token fetch:
+
+1. **Pre-existing refresh token** (`refreshToken` / `OAUTH2_REFRESH_TOKEN`) — used immediately.
+2. **Pre-supplied one-shot code** (`authorizationCode`) — exchanged once; if the IdP returns a `refresh_token` it is used for renewals.
+3. **Interactive browser login** (default when neither of the above is set): the proxy starts a local listener on `http://127.0.0.1:53682/callback` (configurable), generates a PKCE `S256` challenge, opens the user's default browser at the IdP's authorization endpoint, and exchanges the returned code. The refresh token is then persisted under the OS user config directory so subsequent launches are silent.
+
+The redirect URI used in interactive mode is
+`http://<callbackHost>:<callbackPort>/callback` and must be registered
+with your IdP (most IdPs require explicit registration of redirect URIs;
+many accept arbitrary `http://127.0.0.1:*` URIs for public/native
+clients per RFC 8252).
+
+Disable interactive mode with `"interactive": false` or
+`OAUTH2_INTERACTIVE=false` — the proxy then fails fast at first token
+fetch unless a code or refresh token is configured.
+
+#### Refresh-token cache
+
+When interactive auth completes (or whenever the IdP rotates the refresh
+token), the new value is encrypted (AES‑256‑GCM) with a random key and
+stored under:
+
+- Windows: `%APPDATA%\mcp-oauth2-proxy\`
+- macOS: `~/Library/Application Support/mcp-oauth2-proxy/`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/mcp-oauth2-proxy/`
+
+The location can be overridden with `OAUTH2_TOKEN_CACHE_DIR`. Cache
+files are keyed by `sha256(clientId|tokenUrl)`, so multiple
+configurations co-exist.
+
+> **Security note:** The cache encryption is *obfuscation*, not strong
+> protection. The key file (`key.bin`) lives alongside the cached token
+> with `0600` permissions; any process running as the same OS user can
+> read both. Use OS-level user isolation (or an OS keychain integration,
+> not yet supported) if you need stronger guarantees.
 
 ### Discovery (RFC 9728)
 
@@ -215,8 +248,9 @@ upstream MCP server's OAuth 2.0 Protected Resource Metadata
    `.well-known/openid-configuration`) → reads `token_endpoint`,
    `authorization_endpoint`, and `scopes_supported`
 
-Discovered values fill in any missing `tokenUrl` and `scope`. Explicit
-config or env vars always win over discovery.
+Discovered values fill in any missing `tokenUrl`, `scope`, and
+`authorizationUrl` (used by the interactive `authorization_code` flow).
+Explicit config or env vars always win over discovery.
 
 Disable with `"discovery": { "enabled": false }` or `DISCOVERY_ENABLED=false`.
 
@@ -239,8 +273,14 @@ Every field can also be set via env vars. With these alone (no
 | `OAUTH2_CLIENT_SECRET`        | `oauth2.clientSecret`      |                                             |
 | `OAUTH2_REFRESH_TOKEN`        | `oauth2.refreshToken`      | for `authorization_code` grant              |
 | `OAUTH2_AUTHORIZATION_CODE`   | `oauth2.authorizationCode` |                                             |
+| `OAUTH2_AUTHORIZATION_URL`    | `oauth2.authorizationUrl`  | IdP authorization endpoint (interactive)    |
 | `OAUTH2_CODE_VERIFIER`        | `oauth2.codeVerifier`      |                                             |
-| `OAUTH2_REDIRECT_URI`         | `oauth2.redirectUri`       |                                             |
+| `OAUTH2_REDIRECT_URI`         | `oauth2.redirectUri`       | overrides the auto-derived callback URL     |
+| `OAUTH2_INTERACTIVE`          | `oauth2.interactive`       | default `true`; set to `false` to disable browser flow |
+| `OAUTH2_CALLBACK_HOST`        | `oauth2.callbackHost`      | default `127.0.0.1`                         |
+| `OAUTH2_CALLBACK_PORT`        | `oauth2.callbackPort`      | default `53682`                             |
+| `OAUTH2_CALLBACK_TIMEOUT_SECONDS` | `oauth2.callbackTimeoutSeconds` | default `300`                          |
+| `OAUTH2_TOKEN_CACHE_DIR`      | `oauth2.tokenCacheDir`     | overrides the per-OS config dir             |
 | `OAUTH2_SCOPE`                | `oauth2.scope`             |                                             |
 | `OAUTH2_AUDIENCE`             | `oauth2.audience`          |                                             |
 | `OAUTH2_AUTH_STYLE`           | `oauth2.authStyle`         | `header` or `body`                          |
@@ -402,8 +442,7 @@ above for `mcpServers` snippets.
 ## Out of scope (v1)
 
 - Multiple upstream MCP servers
-- Persistent token storage across restarts
-- Interactive browser-based `authorization_code` flow
+- OS-keychain-backed refresh-token storage (DPAPI / Keychain / libsecret)
 - mTLS / JWT-bearer / device-code grants
 - HTTP / SSE inbound transport (this is a stdio MCP server)
 

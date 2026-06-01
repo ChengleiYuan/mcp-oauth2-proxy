@@ -9,6 +9,7 @@ export interface RefreshTokenOptions {
   authStyle: 'header' | 'body';
   initialRefreshToken: string;
   extraParams?: Record<string, string>;
+  onRefreshTokenUpdated?: (refreshToken: string) => void;
 }
 
 export class RefreshTokenGrant implements Grant {
@@ -44,7 +45,10 @@ export class RefreshTokenGrant implements Grant {
     });
     const { status, bodyText } = await this.http.postForm(this.opts.tokenUrl, body, headers);
     const tok = parseTokenResponse(status, bodyText);
-    if (tok.refreshToken) this.refreshToken = tok.refreshToken;
+    if (tok.refreshToken && tok.refreshToken !== this.refreshToken) {
+      this.refreshToken = tok.refreshToken;
+      this.opts.onRefreshTokenUpdated?.(tok.refreshToken);
+    }
     return tok;
   }
 }

@@ -47,6 +47,17 @@ async function main(): Promise<void> {
         cfg.oauth2.scope = discovered.scopesSupported.join(' ');
         log.info({ scope: cfg.oauth2.scope }, 'discovery: using discovered scopes');
       }
+      if (
+        cfg.oauth2.grant === 'authorization_code' &&
+        !cfg.oauth2.authorizationUrl &&
+        discovered.authorizationEndpoint
+      ) {
+        cfg.oauth2.authorizationUrl = discovered.authorizationEndpoint;
+        log.info(
+          { authorizationUrl: discovered.authorizationEndpoint },
+          'discovery: using discovered authorization endpoint',
+        );
+      }
     } catch (err) {
       log.warn({ err }, 'discovery failed; continuing with configured values');
     }
@@ -54,7 +65,7 @@ async function main(): Promise<void> {
 
   let grant;
   try {
-    grant = buildGrant(cfg.oauth2);
+    grant = buildGrant({ cfg: cfg.oauth2, log });
   } catch (err) {
     process.stderr.write(`failed to build oauth2 grant: ${(err as Error).message}\n`);
     process.exit(2);
