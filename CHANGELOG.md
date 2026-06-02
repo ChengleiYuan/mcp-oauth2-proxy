@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.9](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.8...v0.1.9) (2026-06-02)
+
+
+### Bug Fixes
+
+* multiple robustness improvements ([#20](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/20)) ([8617c78](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/8617c78fc0421836742db207bdabada665ff79e6))
+
 ## [0.1.8](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.7...v0.1.8) (2026-06-01)
 
 
