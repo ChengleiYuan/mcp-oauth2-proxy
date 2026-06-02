@@ -41,13 +41,14 @@ export class Bridge {
   async run(): Promise<void> {
     this.opts.log.info('bridge.run: waiting for messages on stdin');
     let count = 0;
+    let pending = Promise.resolve();
     for await (const msg of this.opts.codec.messages()) {
       count++;
       this.opts.log.debug(
         { count, method: msg.method, id: msg.id, hasResult: msg.result !== undefined },
         'bridge.run: received message from stdin',
       );
-      void this.handleClientMessage(msg);
+      pending = pending.then(() => this.handleClientMessage(msg));
     }
     this.opts.log.info({ count }, 'bridge.run: stdin closed, exiting message loop');
     this.serverStreamCtrl?.abort();
@@ -178,9 +179,14 @@ export class Bridge {
   }
 
   private async consumeSse(body: Dispatcher.ResponseData['body']): Promise<void> {
+    const MAX_BUF = 8 * 1024 * 1024; // 8 MB guard
     let buf = '';
     for await (const chunk of body) {
       buf += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8');
+      if (buf.length > MAX_BUF) {
+        this.opts.log.error({ bufLen: buf.length }, 'SSE buffer exceeded 8 MB limit, aborting stream');
+        break;
+      }
       let idx: number;
       while ((idx = findEventBoundary(buf)) !== -1) {
         const event = buf.slice(0, idx);
@@ -242,6 +248,7 @@ export class Bridge {
           await res.body.dump();
           this.opts.tokenManager.invalidate();
           retries++;
+          await sleep(backoffMs(retries));
           continue;
         }
         if (res.statusCode === 405 || res.statusCode === 404) {
@@ -257,7 +264,7 @@ export class Bridge {
           this.opts.log.warn({ status: res.statusCode }, 'server-stream error; reconnecting');
           await res.body.dump();
           retries++;
-          await sleep(1000);
+          await sleep(backoffMs(retries));
           continue;
         }
         const contentType = headerString(res.headers['content-type']) ?? '';
@@ -272,7 +279,7 @@ export class Bridge {
         if ((err as { name?: string }).name === 'AbortError') return;
         this.opts.log.warn({ err }, 'server-stream connection error; backing off');
         retries++;
-        await sleep(2000);
+        await sleep(backoffMs(retries));
       }
     }
   }
@@ -293,4 +300,12 @@ function findEventBoundary(buf: string): number {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Exponential backoff with jitter: base 500 ms, cap 30 s */
+function backoffMs(attempt: number): number {
+  const base = 500;
+  const cap = 30_000;
+  const exp = Math.min(cap, base * 2 ** (attempt - 1));
+  return exp / 2 + Math.random() * (exp / 2);
 }
