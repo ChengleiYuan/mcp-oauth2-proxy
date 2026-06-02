@@ -41,7 +41,11 @@ export class StdioCodec {
 
   write(msg: JsonRpcMessage | unknown): void {
     const line = JSON.stringify(msg) + '\n';
-    this.output.write(line);
+    try {
+      this.output.write(line);
+    } catch {
+      // stdout may already be closed (e.g. client disconnected); suppress to avoid uncaught exception
+    }
   }
 
   close(): void {

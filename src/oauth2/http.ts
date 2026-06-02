@@ -11,6 +11,8 @@ export const undiciHttpClient: OAuthHttpClient = {
         ...headers,
       },
       body: body.toString(),
+      bodyTimeout: 30_000,
+      headersTimeout: 30_000,
     });
     const bodyText = await res.body.text();
     return { status: res.statusCode, bodyText };
@@ -52,9 +54,7 @@ export function parseTokenResponse(status: number, bodyText: string): TokenRespo
 export function basicAuthHeader(clientId: string, clientSecret: string): string {
   return (
     'Basic ' +
-    Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString(
-      'base64',
-    )
+    Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
   );
 }
 
