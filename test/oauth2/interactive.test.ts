@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { request } from 'undici';
+import { request as httpRequest } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
   buildAuthorizeUrl,
@@ -94,7 +95,7 @@ describe('callback server', () => {
     }
   });
 
-  it('rejects on error response', async () => {
+  it('rejects a request whose Host header is not loopback', async () => {
     const port = await pickPort();
     const { server, codePromise } = startCallbackServer({
       host: '127.0.0.1',
@@ -103,18 +104,32 @@ describe('callback server', () => {
       timeoutMs: 5000,
       log,
     });
+    // keep the rejection from becoming an unhandled rejection if it ever fires
     const caught = codePromise.catch((e: Error) => e);
     await new Promise<void>((resolve) => server.once('listening', () => resolve()));
     try {
-      const res = await request(
-        `http://127.0.0.1:${port}/callback?error=access_denied&error_description=nope&state=st1`,
-      );
-      expect(res.statusCode).toBe(400);
-      await res.body.text();
-      expect((await caught).message).toMatch(/access_denied/);
+      const status = await new Promise<number>((resolve, reject) => {
+        const req = httpRequest(
+          {
+            host: '127.0.0.1',
+            port,
+            path: '/callback?code=AC&state=st1',
+            method: 'GET',
+            headers: { host: 'evil.example.com' },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode ?? 0);
+          },
+        );
+        req.on('error', reject);
+        req.end();
+      });
+      expect(status).toBe(400);
     } finally {
       server.close();
     }
+    void caught;
   });
 });
 
