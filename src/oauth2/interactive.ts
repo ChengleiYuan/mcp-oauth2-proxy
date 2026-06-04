@@ -125,7 +125,44 @@ export function startCallbackServer(opts: StartCallbackServerOptions): {
   }, opts.timeoutMs);
   timer.unref?.();
 
+  const expectedHosts = buildAllowedHosts(opts.host, opts.port);
+
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    // DNS-rebinding defense (per MCP transport spec): only accept requests
+    // whose Host header points at our loopback bind. Browsers send the
+    // attacker-chosen hostname in Host, even after rebinding the DNS to
+    // 127.0.0.1, so allowlisting Host blocks the attack.
+    const hostHeader = (req.headers.host ?? '').toLowerCase();
+    if (!expectedHosts.has(hostHeader)) {
+      opts.log.warn({ host: hostHeader, expected: [...expectedHosts] }, 'callback: rejecting unexpected Host header');
+      res.statusCode = 421;
+      res.end('misdirected request');
+      return;
+    }
+    // If the browser sent an Origin header (it usually won't for a top-level
+    // IdP redirect, but might for redirects via fetch), require it to match.
+    const origin = req.headers.origin;
+    if (origin && origin !== 'null') {
+      let originHost: string;
+      try {
+        originHost = new URL(origin).host.toLowerCase();
+      } catch {
+        originHost = '';
+      }
+      if (!expectedHosts.has(originHost)) {
+        opts.log.warn({ origin }, 'callback: rejecting unexpected Origin header');
+        res.statusCode = 403;
+        res.end('forbidden origin');
+        return;
+      }
+    }
+    // Authorization redirects are always GET; reject anything else.
+    if (req.method !== 'GET') {
+      res.statusCode = 405;
+      res.setHeader('allow', 'GET');
+      res.end('method not allowed');
+      return;
+    }
     const url = new URL(req.url ?? '/', `http://${opts.host}:${opts.port}`);
     if (url.pathname !== '/callback') {
       res.statusCode = 404;
@@ -234,4 +271,31 @@ function escapeHtml(s: string): string {
 
 function base64UrlEncode(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+const LOOPBACK_NAMES = new Set(['127.0.0.1', '::1', 'localhost']);
+
+export function isLoopbackHost(host: string): boolean {
+  return LOOPBACK_NAMES.has(host.toLowerCase());
+}
+
+function buildAllowedHosts(host: string, port: number): Set<string> {
+  const h = host.toLowerCase();
+  const variants: string[] = [];
+  const addPair = (name: string): void => {
+    variants.push(`${name}:${port}`);
+    variants.push(name);
+  };
+  if (h === '0.0.0.0' || h === '::' || isLoopbackHost(h)) {
+    // When bound to loopback (or all-interfaces), accept all three loopback
+    // names. We deliberately reject non-loopback Host headers regardless of
+    // the actual bind to defend against DNS rebinding via attacker-chosen
+    // hostnames.
+    addPair('127.0.0.1');
+    addPair('localhost');
+    addPair('[::1]');
+  } else {
+    addPair(h);
+  }
+  return new Set(variants);
 }

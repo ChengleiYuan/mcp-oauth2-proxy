@@ -94,7 +94,7 @@ describe('callback server', () => {
     }
   });
 
-  it('rejects on error response', async () => {
+  it('rejects unexpected Host header (DNS-rebinding defense)', async () => {
     const port = await pickPort();
     const { server, codePromise } = startCallbackServer({
       host: '127.0.0.1',
@@ -103,15 +103,81 @@ describe('callback server', () => {
       timeoutMs: 5000,
       log,
     });
-    const caught = codePromise.catch((e: Error) => e);
+    void codePromise.catch(() => {});
     await new Promise<void>((resolve) => server.once('listening', () => resolve()));
     try {
-      const res = await request(
-        `http://127.0.0.1:${port}/callback?error=access_denied&error_description=nope&state=st1`,
-      );
-      expect(res.statusCode).toBe(400);
+      const res = await request(`http://127.0.0.1:${port}/callback?code=AC&state=st1`, {
+        headers: { host: 'attacker.example.com' },
+      });
+      expect(res.statusCode).toBe(421);
       await res.body.text();
-      expect((await caught).message).toMatch(/access_denied/);
+    } finally {
+      server.close();
+    }
+  });
+
+  it('rejects non-GET methods', async () => {
+    const port = await pickPort();
+    const { server, codePromise } = startCallbackServer({
+      host: '127.0.0.1',
+      port,
+      expectedState: 'st1',
+      timeoutMs: 5000,
+      log,
+    });
+    void codePromise.catch(() => {});
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    try {
+      const res = await request(`http://127.0.0.1:${port}/callback?code=AC&state=st1`, {
+        method: 'POST',
+      });
+      expect(res.statusCode).toBe(405);
+      expect(res.headers['allow']).toBe('GET');
+      await res.body.text();
+    } finally {
+      server.close();
+    }
+  });
+
+  it('rejects unexpected Origin header', async () => {
+    const port = await pickPort();
+    const { server, codePromise } = startCallbackServer({
+      host: '127.0.0.1',
+      port,
+      expectedState: 'st1',
+      timeoutMs: 5000,
+      log,
+    });
+    void codePromise.catch(() => {});
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    try {
+      const res = await request(`http://127.0.0.1:${port}/callback?code=AC&state=st1`, {
+        headers: { origin: 'https://evil.example.com' },
+      });
+      expect(res.statusCode).toBe(403);
+      await res.body.text();
+    } finally {
+      server.close();
+    }
+  });
+
+  it('accepts localhost Host header when bound to 127.0.0.1', async () => {
+    const port = await pickPort();
+    const { server, codePromise } = startCallbackServer({
+      host: '127.0.0.1',
+      port,
+      expectedState: 'st1',
+      timeoutMs: 5000,
+      log,
+    });
+    await new Promise<void>((resolve) => server.once('listening', () => resolve()));
+    try {
+      const res = await request(`http://127.0.0.1:${port}/callback?code=AC&state=st1`, {
+        headers: { host: `localhost:${port}` },
+      });
+      expect(res.statusCode).toBe(200);
+      await res.body.text();
+      expect(await codePromise).toBe('AC');
     } finally {
       server.close();
     }

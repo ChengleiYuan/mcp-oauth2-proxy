@@ -6,6 +6,7 @@ import { buildGrant } from './oauth2/factory.js';
 import { discoverFromUpstream } from './oauth2/discovery.js';
 import { StdioCodec } from './stdio.js';
 import { Bridge } from './bridge.js';
+import { isLoopbackHost } from './oauth2/interactive.js';
 
 async function main(): Promise<void> {
   let cfg;
@@ -89,6 +90,40 @@ async function main(): Promise<void> {
   }
 
   const codec = new StdioCodec(process.stdin, process.stdout);
+
+  // Security warnings (per MCP transport spec: bind to loopback only, prefer HTTPS upstream).
+  if (cfg.oauth2.grant === 'authorization_code' && !isLoopbackHost(cfg.oauth2.callbackHost)) {
+    log.warn(
+      { callbackHost: cfg.oauth2.callbackHost },
+      'OAUTH2 callback bound to a non-loopback host; this is strongly discouraged. ' +
+        'Use 127.0.0.1 unless you fully understand the DNS-rebinding risk.',
+    );
+  }
+  try {
+    const u = new URL(cfg.upstream.url);
+    if (u.protocol === 'http:' && !isLoopbackHost(u.hostname)) {
+      log.warn(
+        { upstream: cfg.upstream.url },
+        'upstream URL uses plaintext http:// to a non-loopback host; tokens will travel unencrypted. Prefer https://',
+      );
+    }
+  } catch {
+    /* validated by zod already */
+  }
+  if (cfg.oauth2.grant === 'authorization_code' && cfg.oauth2.redirectUri) {
+    try {
+      const u = new URL(cfg.oauth2.redirectUri);
+      if (!isLoopbackHost(u.hostname)) {
+        log.warn(
+          { redirectUri: cfg.oauth2.redirectUri },
+          'OAUTH2 redirectUri points at a non-loopback host; the authorization code will be delivered to that origin. Use http://127.0.0.1 unless you have a specific reason.',
+        );
+      }
+    } catch {
+      /* validated by zod */
+    }
+  }
+
   const bridge = new Bridge({
     upstreamUrl: cfg.upstream.url,
     timeoutMs: cfg.upstream.timeoutMs,
