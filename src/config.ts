@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const UpstreamSchema = z.object({
   url: z.string().url(),
-  timeoutMs: z.number().int().positive().default(30_000),
+  timeoutMs: z.number().int().positive().default(120_000),
   openServerStream: z.boolean().default(true),
   protocolVersion: z.string().optional(),
 });

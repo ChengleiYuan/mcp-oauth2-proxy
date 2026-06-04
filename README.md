@@ -141,7 +141,7 @@ You can configure the proxy in three ways, mixed freely:
 {
   "upstream": {
     "url": "https://mcp.example.com/mcp",
-    "timeoutMs": 30000,
+    "timeoutMs": 120000,
     "openServerStream": true,
     "protocolVersion": "2025-06-18"
   },
@@ -162,7 +162,7 @@ See [`config.example.json`](./config.example.json).
 | Field              | Default    | Description                                                                                    |
 | ------------------ | ---------- | ---------------------------------------------------------------------------------------------- |
 | `url`              | (required) | Upstream MCP streamable-HTTP endpoint.                                                         |
-| `timeoutMs`        | `30000`    | Per-request body/headers timeout.                                                              |
+| `timeoutMs`        | `120000`   | Hard per-request deadline (ms). Aborts the upstream call after this many ms even if data is still trickling in. Should be ≥ your MCP client's tool-call timeout. |
 | `openServerStream` | `true`     | After `initialize`, open a `GET text/event-stream` channel for server-initiated notifications. |
 | `protocolVersion`  | (unset)    | Value sent in the `MCP-Protocol-Version` header.                                               |
 
