@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.11](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.10...v0.1.11) (2026-06-04)
+
+
+### Bug Fixes
+
+* **security:** enforce HTTPS transport guard and harden OAuth2 callback ([#25](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/25)) ([6e40548](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/6e405485bc1b02f5c94a752a0dc124d911869bef))
+
 ## [0.1.10](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.9...v0.1.10) (2026-06-04)
 
 
