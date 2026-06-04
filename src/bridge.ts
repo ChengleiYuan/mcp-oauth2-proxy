@@ -91,15 +91,23 @@ export class Bridge {
       }
       await this.processUpstreamResponse(res, msg, isInit);
     } catch (err) {
-      this.opts.log.error({ err, ...tag }, 'failed to forward to upstream');
+      const e = err as { message?: string; code?: string; cause?: { message?: string } };
+      const reason = e.cause?.message ?? e.message ?? String(err);
+      const isTimeout =
+        e.code === 'UND_ERR_BODY_TIMEOUT' ||
+        e.code === 'UND_ERR_HEADERS_TIMEOUT' ||
+        /deadline exceeded|timeout/i.test(reason);
+      this.opts.log.error({ err, ...tag, isTimeout }, 'failed to forward to upstream');
       if (isRequest(msg)) {
         this.opts.codec.write({
           jsonrpc: '2.0',
           id: msg.id!,
           error: {
             code: -32000,
-            message: 'mcp-oauth2-proxy: upstream request failed',
-            data: { reason: (err as Error).message },
+            message: isTimeout
+              ? `mcp-oauth2-proxy: upstream timed out after ${this.opts.timeoutMs} ms`
+              : 'mcp-oauth2-proxy: upstream request failed',
+            data: { reason, code: e.code },
           },
         });
       }
@@ -112,13 +120,20 @@ export class Bridge {
       { url: this.opts.upstreamUrl, hasSession: !!this.sessionId },
       'POST upstream',
     );
-    return request(this.opts.upstreamUrl, {
-      method: 'POST',
-      headers: headers as unknown as Record<string, string>,
-      body,
-      bodyTimeout: this.opts.timeoutMs,
-      headersTimeout: this.opts.timeoutMs,
-    });
+    const ctrl = new AbortController();
+    const deadline = setTimeout(() => ctrl.abort(new Error('upstream deadline exceeded')), this.opts.timeoutMs);
+    try {
+      return await request(this.opts.upstreamUrl, {
+        method: 'POST',
+        headers: headers as unknown as Record<string, string>,
+        body,
+        signal: ctrl.signal,
+        bodyTimeout: this.opts.timeoutMs,
+        headersTimeout: this.opts.timeoutMs,
+      });
+    } finally {
+      clearTimeout(deadline);
+    }
   }
 
   private async processUpstreamResponse(
@@ -148,6 +163,7 @@ export class Bridge {
           error: {
             code: -32001,
             message: `mcp-oauth2-proxy: upstream returned ${res.statusCode}`,
+            data: { status: res.statusCode, body: text.slice(0, 500) },
           },
         });
       }
