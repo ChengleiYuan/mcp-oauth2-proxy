@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.10](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.9...v0.1.10) (2026-06-04)
+
+
+### Bug Fixes
+
+* **bridge:** hard wall-clock deadline for upstream requests + clearer timeout errors ([#22](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/22)) ([0a12865](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/0a128654990164a9de31602813bcfdb182f13f55))
+
 ## [0.1.9](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.8...v0.1.9) (2026-06-02)
 
 
