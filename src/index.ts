@@ -38,7 +38,7 @@ async function main(): Promise<void> {
 
   if (cfg.discovery.enabled) {
     try {
-      const discovered = await discoverFromUpstream(cfg.upstream.url, log);
+      const discovered = await discoverFromUpstream(cfg.upstream.url, log, cfg.allowInsecureHttp);
       if (!cfg.oauth2.tokenUrl && discovered.tokenEndpoint) {
         cfg.oauth2.tokenUrl = discovered.tokenEndpoint;
         log.info({ tokenUrl: discovered.tokenEndpoint }, 'discovery: using discovered token endpoint');

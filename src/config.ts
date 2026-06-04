@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { readFileSync } from 'node:fs';
+import { assertSecureUrl } from './security.js';
 
 const UpstreamSchema = z.object({
   url: z.string().url(),
@@ -57,6 +58,7 @@ const ConfigSchema = z.object({
   oauth2: OAuthSchema,
   discovery: DiscoverySchema,
   log: LogSchema.default({}),
+  allowInsecureHttp: z.boolean().default(false),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -121,6 +123,9 @@ function applyEnvOverrides(raw: unknown): unknown {
   if (env.LOG_LEVEL) log.level = env.LOG_LEVEL;
   cfg.log = log;
 
+  if (env.ALLOW_INSECURE_HTTP !== undefined)
+    cfg.allowInsecureHttp = parseBool(env.ALLOW_INSECURE_HTTP);
+
   return cfg;
 }
 
@@ -149,5 +154,23 @@ export function loadConfig(path?: string): Config {
     raw = JSON.parse(text);
   }
   const merged = applyEnvOverrides(raw);
-  return ConfigSchema.parse(merged);
+  const cfg = ConfigSchema.parse(merged);
+
+  assertSecureUrl(cfg.upstream.url, {
+    allowInsecureHttp: cfg.allowInsecureHttp,
+    label: 'upstream.url',
+  });
+  if (cfg.oauth2.tokenUrl) {
+    assertSecureUrl(cfg.oauth2.tokenUrl, {
+      allowInsecureHttp: cfg.allowInsecureHttp,
+      label: 'oauth2.tokenUrl',
+    });
+  }
+  if (cfg.oauth2.grant === 'authorization_code' && cfg.oauth2.authorizationUrl) {
+    assertSecureUrl(cfg.oauth2.authorizationUrl, {
+      allowInsecureHttp: cfg.allowInsecureHttp,
+      label: 'oauth2.authorizationUrl',
+    });
+  }
+  return cfg;
 }

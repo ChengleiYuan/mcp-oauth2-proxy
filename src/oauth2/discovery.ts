@@ -1,5 +1,6 @@
 import { request } from 'undici';
 import type { Logger } from '../log.js';
+import { assertSecureUrl } from '../security.js';
 
 /**
  * OAuth2 metadata discovery for MCP servers per RFC 9728 (OAuth 2.0 Protected
@@ -41,8 +42,20 @@ interface AuthorizationServerMetadata {
 export async function discoverFromUpstream(
   upstreamUrl: string,
   log: Logger,
+  allowInsecureHttp = false,
 ): Promise<DiscoveryResult> {
   const result: DiscoveryResult = {};
+
+  const keepSecure = (url: string | undefined, label: string): string | undefined => {
+    if (!url) return undefined;
+    try {
+      assertSecureUrl(url, { allowInsecureHttp, label });
+      return url;
+    } catch (err) {
+      log.warn({ err, url, label }, 'discovery: dropping insecure discovered endpoint');
+      return undefined;
+    }
+  };
 
   const resourceMetadataUrls = buildResourceMetadataUrls(upstreamUrl);
   const prm = await fetchFirstJson<ProtectedResourceMetadata>(resourceMetadataUrls, log);
@@ -65,9 +78,9 @@ export async function discoverFromUpstream(
     'discovery: protected-resource metadata',
   );
 
-  const asUrl = prm.body.authorization_servers?.[0];
+  const asUrl = keepSecure(prm.body.authorization_servers?.[0], 'discovery.authorization_server');
   if (!asUrl) {
-    log.warn('discovery: protected-resource metadata has no authorization_servers');
+    log.warn('discovery: protected-resource metadata has no usable authorization_servers');
     return result;
   }
   result.authorizationServer = asUrl;
@@ -81,8 +94,11 @@ export async function discoverFromUpstream(
     );
     return result;
   }
-  result.tokenEndpoint = as.body.token_endpoint;
-  result.authorizationEndpoint = as.body.authorization_endpoint;
+  result.tokenEndpoint = keepSecure(as.body.token_endpoint, 'discovery.token_endpoint');
+  result.authorizationEndpoint = keepSecure(
+    as.body.authorization_endpoint,
+    'discovery.authorization_endpoint',
+  );
   result.registrationEndpoint = as.body.registration_endpoint;
   if (!result.scopesSupported) result.scopesSupported = as.body.scopes_supported;
   log.info(

@@ -27,6 +27,7 @@ const ENV_KEYS = [
   'OAUTH2_CALLBACK_TIMEOUT_SECONDS',
   'OAUTH2_EXTRA_PARAMS',
   'DISCOVERY_ENABLED',
+  'ALLOW_INSECURE_HTTP',
 ] as const;
 
 describe('loadConfig', () => {
@@ -129,5 +130,41 @@ describe('loadConfig', () => {
     process.env.OAUTH2_CLIENT_ID = 'cid';
     process.env.UPSTREAM_TIMEOUT_MS = '  ';
     expect(() => loadConfig()).toThrow(/UPSTREAM_TIMEOUT_MS must be an integer/);
+  });
+
+  it('rejects cleartext http upstream.url to a non-loopback host', () => {
+    process.env.UPSTREAM_URL = 'http://mcp.example.com/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'https://idp.example.com/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    expect(() => loadConfig()).toThrow(/upstream\.url uses cleartext http/);
+  });
+
+  it('rejects cleartext http oauth2.tokenUrl to a non-loopback host', () => {
+    process.env.UPSTREAM_URL = 'https://mcp.example.com/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'http://idp.example.com/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    expect(() => loadConfig()).toThrow(/oauth2\.tokenUrl uses cleartext http/);
+  });
+
+  it('allows cleartext http to a loopback host without the escape hatch', () => {
+    process.env.UPSTREAM_URL = 'http://127.0.0.1:8080/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'http://localhost:9000/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    const cfg = loadConfig();
+    expect(cfg.upstream.url).toBe('http://127.0.0.1:8080/mcp');
+  });
+
+  it('allows cleartext http to a remote host when ALLOW_INSECURE_HTTP is set', () => {
+    process.env.UPSTREAM_URL = 'http://mcp.example.com/mcp';
+    process.env.OAUTH2_GRANT = 'client_credentials';
+    process.env.OAUTH2_TOKEN_URL = 'http://idp.example.com/token';
+    process.env.OAUTH2_CLIENT_ID = 'cid';
+    process.env.ALLOW_INSECURE_HTTP = 'true';
+    const cfg = loadConfig();
+    expect(cfg.allowInsecureHttp).toBe(true);
+    expect(cfg.upstream.url).toBe('http://mcp.example.com/mcp');
   });
 });

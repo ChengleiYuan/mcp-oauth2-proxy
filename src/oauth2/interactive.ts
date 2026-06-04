@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { spawn } from 'node:child_process';
 import { platform } from 'node:os';
 import type { Logger } from '../log.js';
+import { isLoopbackHost } from '../security.js';
 
 export interface InteractiveAuthOptions {
   authorizationUrl: string;
@@ -30,6 +31,14 @@ export async function runInteractiveAuth(
   const codeChallenge = computeS256Challenge(codeVerifier);
   const state = base64UrlEncode(randomBytes(32));
   const redirectUri = opts.redirectUri ?? `http://${opts.callbackHost}:${opts.callbackPort}/callback`;
+
+  if (!isLoopbackHost(opts.callbackHost)) {
+    opts.log.warn(
+      { callbackHost: opts.callbackHost },
+      'interactive auth: callbackHost is not a loopback address; the OAuth callback ' +
+        'listener will be reachable from other hosts. Bind 127.0.0.1 unless you have a reason not to.',
+    );
+  }
 
   const authUrl = buildAuthorizeUrl({
     authorizationUrl: opts.authorizationUrl,
@@ -126,6 +135,11 @@ export function startCallbackServer(opts: StartCallbackServerOptions): {
   timer.unref?.();
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    if (!isAllowedHost(req.headers.host, opts.port)) {
+      opts.log.warn({ host: req.headers.host }, 'callback: rejected request with untrusted Host header');
+      respondHtml(res, 400, 'Authorization failed', 'Untrusted Host header.');
+      return;
+    }
     const url = new URL(req.url ?? '/', `http://${opts.host}:${opts.port}`);
     if (url.pathname !== '/callback') {
       res.statusCode = 404;
@@ -167,6 +181,20 @@ export function startCallbackServer(opts: StartCallbackServerOptions): {
 
   server.listen(opts.port, opts.host);
   return { server, codePromise };
+}
+
+function isAllowedHost(hostHeader: string | undefined, expectedPort: number): boolean {
+  if (!hostHeader) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(`http://${hostHeader}`);
+  } catch {
+    return false;
+  }
+  if (!isLoopbackHost(parsed.hostname)) return false;
+  // An explicit port in the Host header must match the listener; absence is fine.
+  if (parsed.port && Number(parsed.port) !== expectedPort) return false;
+  return true;
 }
 
 function waitForListening(server: Server): Promise<void> {
