@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.12](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.11...v0.1.12) (2026-06-05)
+
+
+### Bug Fixes
+
+* **bridge:** process requests concurrently and recover MCP sessions ([#27](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/27)) ([88ef5ea](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/88ef5ea54118d993c5646b108a63501bb75dfad0))
+
 ## [0.1.11](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.10...v0.1.11) (2026-06-04)
 
 
