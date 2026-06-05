@@ -41,16 +41,36 @@ export class Bridge {
   async run(): Promise<void> {
     this.opts.log.info('bridge.run: waiting for messages on stdin');
     let count = 0;
-    let pending = Promise.resolve();
+    // Serialize only the initialize handshake so the upstream session id is
+    // captured before any other request is forwarded. Once initialized,
+    // process messages concurrently: a long-running call (e.g. a slow tool)
+    // must not block the client's keepalive ping or other in-flight requests,
+    // otherwise the client treats the connection as dead and reconnects.
+    let handshake = Promise.resolve();
+    let initialized = false;
+    const inFlight = new Set<Promise<void>>();
     for await (const msg of this.opts.codec.messages()) {
       count++;
       this.opts.log.debug(
         { count, method: msg.method, id: msg.id, hasResult: msg.result !== undefined },
         'bridge.run: received message from stdin',
       );
-      pending = pending.then(() => this.handleClientMessage(msg));
+      if (!initialized) {
+        handshake = handshake.then(() => this.handleClientMessage(msg));
+        if (msg.method === 'initialize') {
+          initialized = true;
+          await handshake;
+        }
+        continue;
+      }
+      const p = this.handleClientMessage(msg).finally(() => {
+        inFlight.delete(p);
+      });
+      inFlight.add(p);
     }
     this.opts.log.info({ count }, 'bridge.run: stdin closed, exiting message loop');
+    await handshake;
+    await Promise.allSettled(inFlight);
     this.serverStreamCtrl?.abort();
   }
 
@@ -156,6 +176,13 @@ export class Bridge {
     if (res.statusCode < 200 || res.statusCode >= 300) {
       const text = await res.body.text();
       this.opts.log.error({ status: res.statusCode, body: text.slice(0, 500) }, 'upstream error');
+      // A 404 against an established session means the upstream expired/dropped
+      // it (per the MCP Streamable HTTP spec). Forget the stale id so the next
+      // initialize starts a fresh session instead of looping on 404 forever.
+      if (res.statusCode === 404 && this.sessionId) {
+        this.opts.log.warn({ sessionId: this.sessionId }, 'upstream 404: clearing expired session id');
+        this.sessionId = undefined;
+      }
       if (isRequest(requestMsg)) {
         this.opts.codec.write({
           jsonrpc: '2.0',
@@ -267,7 +294,17 @@ export class Bridge {
           await sleep(backoffMs(retries));
           continue;
         }
-        if (res.statusCode === 405 || res.statusCode === 404) {
+        if (res.statusCode === 429) {
+          this.opts.log.warn('server-stream 429 rate-limited; backing off');
+          await res.body.dump();
+          retries++;
+          await sleep(backoffMs(retries));
+          continue;
+        }
+        // Any other 4xx (400/404/405/406/415/501-style rejections) means the
+        // upstream does not accept a long-lived GET SSE channel. Retrying would
+        // just spam the server with identical rejected requests, so disable it.
+        if (res.statusCode >= 400 && res.statusCode < 500) {
           this.opts.log.info(
             { status: res.statusCode },
             'upstream does not support server stream; will not attempt again',
