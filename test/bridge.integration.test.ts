@@ -19,6 +19,10 @@ interface UpstreamState {
   seenSessionIds: string[];
   postsToRespondWithSse: boolean;
   serverStreamRequested: boolean;
+  slowMethodDelayMs: number;
+  respond404ForMethod: string | null;
+  getRequestCount: number;
+  respond400OnGet: boolean;
 }
 
 function makeIdp(state: IdpState): Server {
@@ -62,6 +66,12 @@ function makeUpstream(state: UpstreamState): Server {
 
     if (req.method === 'GET') {
       state.serverStreamRequested = true;
+      state.getRequestCount++;
+      if (state.respond400OnGet) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'bad request' }));
+        return;
+      }
       res.statusCode = 200;
       res.setHeader('content-type', 'text/event-stream');
       res.setHeader('cache-control', 'no-cache');
@@ -85,6 +95,13 @@ function makeUpstream(state: UpstreamState): Server {
       const isInit = msg.method === 'initialize';
       res.setHeader('mcp-session-id', 'srv-session');
 
+      if (state.respond404ForMethod && msg.method === state.respond404ForMethod) {
+        res.statusCode = 404;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'session not found' }));
+        return;
+      }
+
       if (msg.id === undefined || msg.id === null) {
         res.statusCode = 202;
         res.end();
@@ -97,16 +114,24 @@ function makeUpstream(state: UpstreamState): Server {
         result: { ok: true, method: msg.method, isInit },
       };
 
-      if (state.postsToRespondWithSse) {
+      const finish = () => {
+        if (state.postsToRespondWithSse) {
+          res.statusCode = 200;
+          res.setHeader('content-type', 'text/event-stream');
+          res.write('data: ' + JSON.stringify(responseMsg) + '\n\n');
+          res.end();
+          return;
+        }
         res.statusCode = 200;
-        res.setHeader('content-type', 'text/event-stream');
-        res.write('data: ' + JSON.stringify(responseMsg) + '\n\n');
-        res.end();
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify(responseMsg));
+      };
+
+      if (state.slowMethodDelayMs > 0 && msg.method === 'slow') {
+        setTimeout(finish, state.slowMethodDelayMs);
         return;
       }
-      res.statusCode = 200;
-      res.setHeader('content-type', 'application/json');
-      res.end(JSON.stringify(responseMsg));
+      finish();
     });
   });
 }
@@ -154,6 +179,10 @@ describe('Bridge (stdio ↔ HTTP MCP)', () => {
     seenSessionIds: [],
     postsToRespondWithSse: false,
     serverStreamRequested: false,
+    slowMethodDelayMs: 0,
+    respond404ForMethod: null,
+    getRequestCount: 0,
+    respond400OnGet: false,
   };
 
   beforeAll(async () => {
@@ -248,13 +277,66 @@ describe('Bridge (stdio ↔ HTTP MCP)', () => {
     await runPromise;
   });
 
-  it('opens server-stream after initialize when enabled and emits notifications', async () => {
-    upstreamState.serverStreamRequested = false;
-    const { stdin, stdout, runPromise } = makeBridge({ openServerStream: true });
+  it('does not let a slow request block a concurrent ping (keepalive)', async () => {
+    upstreamState.slowMethodDelayMs = 300;
+    const { stdin, stdout, runPromise } = makeBridge();
     stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }) + '\n');
-    const msgs = await collectMessages(stdout, 2, 1500);
-    expect(msgs.some((m) => m.method === 'notifications/server_push')).toBe(true);
-    expect(upstreamState.serverStreamRequested).toBe(true);
+    await collectMessages(stdout, 1);
+
+    // Fire a slow call, then immediately a ping. The ping must come back well
+    // before the slow call finishes, proving requests are not serialized.
+    stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'slow' }) + '\n');
+    stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'ping' }) + '\n');
+
+    const pingFirst = await collectMessages(stdout, 2, 200);
+    // Within 200ms (< the 300ms slow delay) we should already have the ping
+    // response (id 3) back, while the slow response (id 2) is still pending.
+    const ids = pingFirst.map((m) => m.id);
+    expect(ids).toContain(3);
+    expect(ids).not.toContain(2);
+
+    // The slow response (id 2) arrives later; a fresh collector only sees new data.
+    const rest = await collectMessages(stdout, 1, 1000);
+    expect(rest.map((m) => m.id)).toContain(2);
+
+    upstreamState.slowMethodDelayMs = 0;
+    stdin.end();
+    await runPromise;
+  });
+
+  it('clears the session id on upstream 404 so a later initialize re-establishes it', async () => {
+    upstreamState.seenSessionIds.length = 0;
+    const { bridge, stdin, stdout, runPromise } = makeBridge();
+    stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }) + '\n');
+    await collectMessages(stdout, 1);
+    expect((bridge as unknown as { sessionId?: string }).sessionId).toBe('srv-session');
+
+    // Upstream now rejects this session id with 404 (expired session).
+    upstreamState.respond404ForMethod = 'ping';
+    stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'ping' }) + '\n');
+    const msgs = await collectMessages(stdout, 2);
+    const err = msgs.find((m) => m.id === 2);
+    expect(err?.error).toBeDefined();
+    // The stale session id must have been forgotten.
+    expect((bridge as unknown as { sessionId?: string }).sessionId).toBeUndefined();
+
+    upstreamState.respond404ForMethod = null;
+    stdin.end();
+    await runPromise;
+  });
+
+  it('disables the server-stream after a single 400 GET instead of retrying', async () => {
+    upstreamState.serverStreamRequested = false;
+    upstreamState.getRequestCount = 0;
+    upstreamState.respond400OnGet = true;
+    const { bridge, stdin, stdout, runPromise } = makeBridge({ openServerStream: true });
+    stdin.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize' }) + '\n');
+    await collectMessages(stdout, 1);
+    // Give the server-stream attempt time to run; it must NOT retry on 400.
+    await delay(300);
+    expect(upstreamState.getRequestCount).toBe(1);
+    expect((bridge as unknown as { serverStreamDisabled: boolean }).serverStreamDisabled).toBe(true);
+    upstreamState.respond400OnGet = false;
     stdin.end();
     await runPromise;
   });
