@@ -6,6 +6,7 @@ export interface RefreshTokenOptions {
   clientId: string;
   clientSecret?: string;
   scope?: string;
+  resource?: string;
   authStyle: 'header' | 'body';
   initialRefreshToken: string;
   extraParams?: Record<string, string>;
@@ -33,10 +34,11 @@ export class RefreshTokenGrant implements Grant {
     const body = new URLSearchParams();
     body.set('grant_type', 'refresh_token');
     body.set('refresh_token', this.refreshToken);
-    if (this.opts.scope) body.set('scope', this.opts.scope);
     if (this.opts.extraParams) {
       for (const [k, v] of Object.entries(this.opts.extraParams)) body.set(k, v);
     }
+    if (this.opts.scope) body.set('scope', this.opts.scope);
+    if (this.opts.resource) body.set('resource', this.opts.resource);
     const headers: Record<string, string> = {};
     applyClientAuth(body, headers, {
       clientId: this.opts.clientId,

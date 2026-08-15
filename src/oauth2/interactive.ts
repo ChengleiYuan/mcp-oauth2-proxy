@@ -9,6 +9,7 @@ export interface InteractiveAuthOptions {
   authorizationUrl: string;
   clientId: string;
   scope?: string;
+  resource?: string;
   callbackHost: string;
   callbackPort: number;
   callbackTimeoutSeconds: number;
@@ -30,7 +31,8 @@ export async function runInteractiveAuth(
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = computeS256Challenge(codeVerifier);
   const state = base64UrlEncode(randomBytes(32));
-  const redirectUri = opts.redirectUri ?? `http://${opts.callbackHost}:${opts.callbackPort}/callback`;
+  const redirectUri =
+    opts.redirectUri ?? `http://${opts.callbackHost}:${opts.callbackPort}/callback`;
 
   if (!isLoopbackHost(opts.callbackHost)) {
     opts.log.warn(
@@ -45,6 +47,7 @@ export async function runInteractiveAuth(
     clientId: opts.clientId,
     redirectUri,
     scope: opts.scope,
+    resource: opts.resource,
     state,
     codeChallenge,
     extraParams: opts.extraParams,
@@ -92,6 +95,7 @@ export function buildAuthorizeUrl(args: {
   clientId: string;
   redirectUri: string;
   scope?: string;
+  resource?: string;
   state: string;
   codeChallenge: string;
   extraParams?: Record<string, string>;
@@ -107,6 +111,7 @@ export function buildAuthorizeUrl(args: {
   if (args.extraParams) {
     for (const [k, v] of Object.entries(args.extraParams)) u.searchParams.set(k, v);
   }
+  if (args.resource) u.searchParams.set('resource', args.resource);
   return u.toString();
 }
 
@@ -136,7 +141,10 @@ export function startCallbackServer(opts: StartCallbackServerOptions): {
 
   const server = createServer((req: IncomingMessage, res: ServerResponse) => {
     if (!isAllowedHost(req.headers.host, opts.port)) {
-      opts.log.warn({ host: req.headers.host }, 'callback: rejected request with untrusted Host header');
+      opts.log.warn(
+        { host: req.headers.host },
+        'callback: rejected request with untrusted Host header',
+      );
       respondHtml(res, 400, 'Authorization failed', 'Untrusted Host header.');
       return;
     }
@@ -151,10 +159,18 @@ export function startCallbackServer(opts: StartCallbackServerOptions): {
     const code = url.searchParams.get('code');
     const state = url.searchParams.get('state');
     if (error) {
-      respondHtml(res, 400, `Authorization failed: ${escapeHtml(error)}`,
-        errorDesc ? escapeHtml(errorDesc) : '');
+      respondHtml(
+        res,
+        400,
+        `Authorization failed: ${escapeHtml(error)}`,
+        errorDesc ? escapeHtml(errorDesc) : '',
+      );
       clearTimeout(timer);
-      reject(new Error(`authorization server returned error: ${error}${errorDesc ? ` - ${errorDesc}` : ''}`));
+      reject(
+        new Error(
+          `authorization server returned error: ${error}${errorDesc ? ` - ${errorDesc}` : ''}`,
+        ),
+      );
       return;
     }
     if (!code || !state) {

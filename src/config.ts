@@ -14,6 +14,7 @@ const BaseOAuthSchema = z.object({
   clientId: z.string().min(1),
   clientSecret: z.string().optional(),
   scope: z.string().optional(),
+  resource: z.string().min(1).optional(),
   audience: z.string().optional(),
   authStyle: z.enum(['header', 'body']).default('body'),
   refreshSkewSeconds: z.number().int().nonnegative().default(30),
@@ -90,6 +91,7 @@ function applyEnvOverrides(raw: unknown): unknown {
     );
   if (env.OAUTH2_TOKEN_CACHE_DIR) oauth.tokenCacheDir = env.OAUTH2_TOKEN_CACHE_DIR;
   if (env.OAUTH2_SCOPE) oauth.scope = env.OAUTH2_SCOPE;
+  if (env.OAUTH2_RESOURCE) oauth.resource = env.OAUTH2_RESOURCE;
   if (env.OAUTH2_AUDIENCE) oauth.audience = env.OAUTH2_AUDIENCE;
   if (env.OAUTH2_AUTH_STYLE) oauth.authStyle = env.OAUTH2_AUTH_STYLE;
   if (env.OAUTH2_REFRESH_SKEW_SECONDS)

@@ -16,8 +16,10 @@ describe('ClientCredentialsGrant', () => {
         clientId: 'cid',
         clientSecret: 'csec',
         scope: 'mcp:read',
+        resource: 'https://mcp.example.com/mcp',
         audience: 'https://mcp.example.com',
         authStyle: 'header',
+        extraParams: { resource: 'https://ignored.example.com/mcp' },
       },
       http,
     );
@@ -28,6 +30,7 @@ describe('ClientCredentialsGrant', () => {
     const call = http.calls[0]!;
     expect(call.body.grant_type).toBe('client_credentials');
     expect(call.body.scope).toBe('mcp:read');
+    expect(call.body.resource).toBe('https://mcp.example.com/mcp');
     expect(call.body.audience).toBe('https://mcp.example.com');
     expect(call.body.client_id).toBe('cid');
     expect(call.body.client_secret).toBeUndefined();

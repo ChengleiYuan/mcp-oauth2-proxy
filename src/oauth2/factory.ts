@@ -24,6 +24,7 @@ export function buildGrant(arg: OAuthConfig | BuildGrantOptions, log?: Logger): 
     clientSecret: cfg.clientSecret,
     authStyle: cfg.authStyle,
     scope: cfg.scope,
+    resource: cfg.resource,
     extraParams: cfg.extraParams,
   };
 

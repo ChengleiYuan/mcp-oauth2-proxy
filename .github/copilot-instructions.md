@@ -29,7 +29,7 @@ npm run format           # prettier --write
    env or default path) merged with env-var overrides (env wins). `oauth2` is a
    `discriminatedUnion('grant', ...)` over `client_credentials` and
    `authorization_code`.
-2. **`oauth2/discovery.ts`** — optionally fills missing `tokenUrl` / `scope` /
+2. **`oauth2/discovery.ts`** — optionally fills missing `tokenUrl` / `scope` / `resource` /
    `authorizationUrl` from the upstream's protected-resource + AS metadata.
 3. **`oauth2/factory.ts` (`buildGrant`)** — picks the concrete `Grant`
    (`grants/clientCredentials.ts` or `grants/authorizationCode.ts`). The
