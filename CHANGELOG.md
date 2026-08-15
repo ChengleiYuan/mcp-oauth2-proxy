@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.12...v0.2.0) (2026-08-15)
+
+
+### Features
+
+* **oauth2:** support resource indicators ([#29](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/29)) ([ee56a69](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/ee56a69e715239d175c4d3f3472d4b120fa4d1ec))
+
 ## [0.1.12](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.11...v0.1.12) (2026-06-05)
 
 
