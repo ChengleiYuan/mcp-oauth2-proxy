@@ -23,6 +23,7 @@ export interface DiscoveryResult {
   authorizationEndpoint?: string;
   registrationEndpoint?: string;
   scopesSupported?: string[];
+  resource?: string;
 }
 
 interface ProtectedResourceMetadata {
@@ -68,6 +69,7 @@ export async function discoverFromUpstream(
   }
   result.resourceMetadataUrl = prm.url;
   result.scopesSupported = prm.body.scopes_supported;
+  result.resource = prm.body.resource;
   log.info(
     {
       url: prm.url,
@@ -88,10 +90,7 @@ export async function discoverFromUpstream(
   const asMetadataUrls = buildAsMetadataUrls(asUrl);
   const as = await fetchFirstJson<AuthorizationServerMetadata>(asMetadataUrls, log);
   if (!as) {
-    log.warn(
-      { tried: asMetadataUrls },
-      'discovery: authorization-server metadata not found',
-    );
+    log.warn({ tried: asMetadataUrls }, 'discovery: authorization-server metadata not found');
     return result;
   }
   result.tokenEndpoint = keepSecure(as.body.token_endpoint, 'discovery.token_endpoint');

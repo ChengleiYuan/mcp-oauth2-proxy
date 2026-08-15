@@ -27,6 +27,7 @@ async function main(): Promise<void> {
         clientSecretSet: !!cfg.oauth2.clientSecret,
         clientSecretLen: cfg.oauth2.clientSecret?.length ?? 0,
         scope: cfg.oauth2.scope,
+        resource: cfg.oauth2.resource,
         audience: cfg.oauth2.audience,
         authStyle: cfg.oauth2.authStyle,
         refreshSkewSeconds: cfg.oauth2.refreshSkewSeconds,
@@ -41,11 +42,18 @@ async function main(): Promise<void> {
       const discovered = await discoverFromUpstream(cfg.upstream.url, log, cfg.allowInsecureHttp);
       if (!cfg.oauth2.tokenUrl && discovered.tokenEndpoint) {
         cfg.oauth2.tokenUrl = discovered.tokenEndpoint;
-        log.info({ tokenUrl: discovered.tokenEndpoint }, 'discovery: using discovered token endpoint');
+        log.info(
+          { tokenUrl: discovered.tokenEndpoint },
+          'discovery: using discovered token endpoint',
+        );
       }
       if (!cfg.oauth2.scope && discovered.scopesSupported?.length) {
         cfg.oauth2.scope = discovered.scopesSupported.join(' ');
         log.info({ scope: cfg.oauth2.scope }, 'discovery: using discovered scopes');
+      }
+      if (!cfg.oauth2.resource && discovered.resource) {
+        cfg.oauth2.resource = discovered.resource;
+        log.info({ resource: cfg.oauth2.resource }, 'discovery: using discovered resource');
       }
       if (
         cfg.oauth2.grant === 'authorization_code' &&
@@ -136,4 +144,3 @@ main().catch((err) => {
   process.stderr.write(`fatal error: ${(err as Error).stack ?? String(err)}\n`);
   process.exit(1);
 });
-

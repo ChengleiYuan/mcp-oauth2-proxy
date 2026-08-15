@@ -44,6 +44,7 @@ describe('discoverFromUpstream security', () => {
     const result = await discoverFromUpstream(`${origin}/mcp`, log);
     expect(result.tokenEndpoint).toBeUndefined();
     expect(result.authorizationEndpoint).toBe('https://idp.example.com/authorize');
+    expect(result.resource).toBe(origin);
   });
 
   it('keeps an insecure endpoint when allowInsecureHttp is true', async () => {

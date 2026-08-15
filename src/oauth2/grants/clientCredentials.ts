@@ -6,6 +6,7 @@ export interface ClientCredentialsOptions {
   clientId: string;
   clientSecret?: string;
   scope?: string;
+  resource?: string;
   audience?: string;
   authStyle: 'header' | 'body';
   extraParams?: Record<string, string>;
@@ -26,11 +27,12 @@ export class ClientCredentialsGrant implements Grant {
   async fetchToken(): Promise<TokenResponse> {
     const body = new URLSearchParams();
     body.set('grant_type', 'client_credentials');
-    if (this.opts.scope) body.set('scope', this.opts.scope);
-    if (this.opts.audience) body.set('audience', this.opts.audience);
     if (this.opts.extraParams) {
       for (const [k, v] of Object.entries(this.opts.extraParams)) body.set(k, v);
     }
+    if (this.opts.scope) body.set('scope', this.opts.scope);
+    if (this.opts.resource) body.set('resource', this.opts.resource);
+    if (this.opts.audience) body.set('audience', this.opts.audience);
     const headers: Record<string, string> = {};
     applyClientAuth(body, headers, {
       clientId: this.opts.clientId,

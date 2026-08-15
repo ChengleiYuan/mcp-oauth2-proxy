@@ -65,7 +65,7 @@ This README is a quick start. **Full documentation lives in the
 ## How it works
 
 1. **Discovery.** Optionally fetch RFC 9728/8414 metadata to fill in
-   `tokenUrl`, `authorizationUrl`, and `scope`.
+   `tokenUrl`, `authorizationUrl`, `scope`, and `resource`.
 2. **Token manager.** Wrap the configured `Grant` with caching,
    refresh-skew, in-flight dedup, and 401 invalidation.
 3. **Prefetch.** Call `getToken()` once at startup so the interactive
@@ -182,7 +182,8 @@ merged result is validated. Minimal example file:
   "oauth2": {
     "grant": "authorization_code",
     "clientId": "my-client",
-    "scope": "mcp:read mcp:write"
+    "scope": "mcp:read mcp:write",
+    "resource": "https://mcp.example.com/mcp"
   }
 }
 ```
@@ -199,7 +200,8 @@ Most-used environment variables:
 | `OAUTH2_CLIENT_SECRET`| `oauth2.clientSecret` |
 | `OAUTH2_TOKEN_URL`    | `oauth2.tokenUrl`   |
 | `OAUTH2_SCOPE`        | `oauth2.scope`      |
-| `LOG_LEVEL`           | `log.level`         |
+| `OAUTH2_RESOURCE`     | `oauth2.resource`    |
+| `LOG_LEVEL`           | `log.level`          |
 
 > **Full reference:** every field, default, and environment variable is
 > documented in the

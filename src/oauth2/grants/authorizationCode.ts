@@ -13,6 +13,7 @@ export interface AuthorizationCodeOptions {
   redirectUri?: string;
   codeVerifier?: string;
   scope?: string;
+  resource?: string;
   initialRefreshToken?: string;
   extraParams?: Record<string, string>;
 
@@ -84,6 +85,7 @@ export class AuthorizationCodeGrant implements Grant {
         authorizationUrl: this.opts.authorizationUrl,
         clientId: this.opts.clientId,
         scope: this.opts.scope,
+        resource: this.opts.resource,
         callbackHost: this.opts.callbackHost,
         callbackPort: this.opts.callbackPort,
         callbackTimeoutSeconds: this.opts.callbackTimeoutSeconds,
@@ -104,6 +106,7 @@ export class AuthorizationCodeGrant implements Grant {
     if (this.opts.extraParams) {
       for (const [k, v] of Object.entries(this.opts.extraParams)) body.set(k, v);
     }
+    if (this.opts.resource) body.set('resource', this.opts.resource);
     const headers: Record<string, string> = {};
     applyClientAuth(body, headers, {
       clientId: this.opts.clientId,
@@ -130,6 +133,7 @@ export class AuthorizationCodeGrant implements Grant {
         clientSecret: this.opts.clientSecret,
         authStyle: this.opts.authStyle,
         scope: this.opts.scope,
+        resource: this.opts.resource,
         initialRefreshToken: refreshToken,
         extraParams: this.opts.extraParams,
         onRefreshTokenUpdated: this.opts.onRefreshTokenUpdated,

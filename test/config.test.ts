@@ -20,6 +20,7 @@ const ENV_KEYS = [
   'OAUTH2_CODE_VERIFIER',
   'OAUTH2_REDIRECT_URI',
   'OAUTH2_SCOPE',
+  'OAUTH2_RESOURCE',
   'OAUTH2_AUDIENCE',
   'OAUTH2_AUTH_STYLE',
   'OAUTH2_REFRESH_SKEW_SECONDS',
@@ -55,6 +56,7 @@ describe('loadConfig', () => {
     process.env.OAUTH2_CLIENT_ID = 'cid';
     process.env.OAUTH2_CLIENT_SECRET = 'csec';
     process.env.OAUTH2_SCOPE = 'mcp:read';
+    process.env.OAUTH2_RESOURCE = 'https://mcp.example.com/mcp';
     process.env.OAUTH2_AUTH_STYLE = 'body';
     process.env.OAUTH2_REFRESH_SKEW_SECONDS = '60';
     process.env.OAUTH2_EXTRA_PARAMS = '{"resource":"https://mcp.example.com"}';
@@ -67,6 +69,8 @@ describe('loadConfig', () => {
     expect(cfg.oauth2.tokenUrl).toBe('https://idp.example.com/token');
     expect(cfg.oauth2.clientId).toBe('cid');
     expect(cfg.oauth2.clientSecret).toBe('csec');
+    expect(cfg.oauth2.scope).toBe('mcp:read');
+    expect(cfg.oauth2.resource).toBe('https://mcp.example.com/mcp');
     expect(cfg.oauth2.authStyle).toBe('body');
     expect(cfg.oauth2.refreshSkewSeconds).toBe(60);
     expect(cfg.oauth2.extraParams).toEqual({ resource: 'https://mcp.example.com' });
@@ -84,11 +88,13 @@ describe('loadConfig', () => {
           tokenUrl: 'https://idp.example.com/token',
           clientId: 'from-file',
           clientSecret: 'will-be-overridden',
+          resource: 'https://file.example.com/mcp',
         },
       }),
     );
     process.env.MCP_PROXY_CONFIG = file;
     process.env.OAUTH2_CLIENT_SECRET = 'from-env';
+    process.env.OAUTH2_RESOURCE = 'https://env.example.com/mcp';
     process.env.UPSTREAM_URL = 'https://env.example.com/mcp';
 
     try {
@@ -96,6 +102,7 @@ describe('loadConfig', () => {
       expect(cfg.upstream.url).toBe('https://env.example.com/mcp');
       expect(cfg.oauth2.clientId).toBe('from-file');
       expect(cfg.oauth2.clientSecret).toBe('from-env');
+      expect(cfg.oauth2.resource).toBe('https://env.example.com/mcp');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -19,12 +19,16 @@ describe('RefreshTokenGrant', () => {
         tokenUrl: 'https://idp.example.com/token',
         clientId: 'cid',
         authStyle: 'body',
+        scope: 'mcp:read',
+        resource: 'https://mcp.example.com/mcp',
         initialRefreshToken: 'r1',
       },
       http,
     );
     await grant.fetchToken();
     expect(http.calls[0]!.body.refresh_token).toBe('r1');
+    expect(http.calls[0]!.body.scope).toBe('mcp:read');
+    expect(http.calls[0]!.body.resource).toBe('https://mcp.example.com/mcp');
     await grant.fetchToken();
     expect(http.calls[1]!.body.refresh_token).toBe('r2');
   });

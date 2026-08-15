@@ -10,6 +10,7 @@
     "clientId": "my-client",
     "clientSecret": "set-via-OAUTH2_CLIENT_SECRET",
     "scope": "mcp:read mcp:write",
+    "resource": "https://mcp.example.com/mcp",
     "audience": "https://mcp.example.com",
     "authStyle": "body",
     "refreshSkewSeconds": 30

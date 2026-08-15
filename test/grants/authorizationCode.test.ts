@@ -39,6 +39,7 @@ describe('AuthorizationCodeGrant', () => {
         authorizationCode: 'code-123',
         redirectUri: 'https://app.example.com/cb',
         codeVerifier: 'pkce-verifier',
+        resource: 'https://mcp.example.com/mcp',
       },
       http,
     );
@@ -48,20 +49,19 @@ describe('AuthorizationCodeGrant', () => {
     expect(http.calls[0]!.body.code).toBe('code-123');
     expect(http.calls[0]!.body.redirect_uri).toBe('https://app.example.com/cb');
     expect(http.calls[0]!.body.code_verifier).toBe('pkce-verifier');
+    expect(http.calls[0]!.body.resource).toBe('https://mcp.example.com/mcp');
 
     await grant.fetchToken();
     expect(http.calls[1]!.body.grant_type).toBe('refresh_token');
     expect(http.calls[1]!.body.refresh_token).toBe('r1');
+    expect(http.calls[1]!.body.resource).toBe('https://mcp.example.com/mcp');
   });
 
   it('uses RefreshTokenGrant immediately when initialRefreshToken provided', async () => {
     const http = mockHttpClient([
       { status: 200, body: { access_token: 'a', expires_in: 60, token_type: 'Bearer' } },
     ]);
-    const grant = new AuthorizationCodeGrant(
-      { ...baseOpts, initialRefreshToken: 'r0' },
-      http,
-    );
+    const grant = new AuthorizationCodeGrant({ ...baseOpts, initialRefreshToken: 'r0' }, http);
     await grant.fetchToken();
     expect(http.calls[0]!.body.grant_type).toBe('refresh_token');
     expect(http.calls[0]!.body.refresh_token).toBe('r0');

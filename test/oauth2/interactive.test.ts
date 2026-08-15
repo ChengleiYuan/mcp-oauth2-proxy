@@ -28,22 +28,24 @@ describe('PKCE helpers', () => {
     expect(c1).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
-  it('buildAuthorizeUrl includes PKCE + state + scope + extras', () => {
+  it('buildAuthorizeUrl includes PKCE, scope, resource, state, and extras', () => {
     const u = new URL(
       buildAuthorizeUrl({
         authorizationUrl: 'https://idp.example.com/authorize',
         clientId: 'cid',
         redirectUri: 'http://127.0.0.1:53682/callback',
         scope: 'a b',
+        resource: 'https://mcp.example.com/mcp',
         state: 's-1',
         codeChallenge: 'cc-1',
-        extraParams: { audience: 'api://x' },
+        extraParams: { audience: 'api://x', resource: 'https://ignored.example.com/mcp' },
       }),
     );
     expect(u.searchParams.get('response_type')).toBe('code');
     expect(u.searchParams.get('client_id')).toBe('cid');
     expect(u.searchParams.get('redirect_uri')).toBe('http://127.0.0.1:53682/callback');
     expect(u.searchParams.get('scope')).toBe('a b');
+    expect(u.searchParams.get('resource')).toBe('https://mcp.example.com/mcp');
     expect(u.searchParams.get('state')).toBe('s-1');
     expect(u.searchParams.get('code_challenge')).toBe('cc-1');
     expect(u.searchParams.get('code_challenge_method')).toBe('S256');
