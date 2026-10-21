@@ -46,7 +46,8 @@ export function parseTokenResponse(status: number, bodyText: string): TokenRespo
     accessToken: parsed.access_token,
     expiresInSeconds: typeof parsed.expires_in === 'number' ? parsed.expires_in : 3600,
     refreshToken: parsed.refresh_token,
-    tokenType: parsed.token_type ?? 'Bearer',
+    tokenType:
+      parsed.token_type?.toLowerCase() === 'bearer' ? 'Bearer' : (parsed.token_type ?? 'Bearer'),
     scope: parsed.scope,
   };
 }
