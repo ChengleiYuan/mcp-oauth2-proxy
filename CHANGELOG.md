@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.2.0...v0.2.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **oauth2:** Normalize ****** casing ([#32](https://github.com/ChengleiYuan/mcp-oauth2-proxy/issues/32)) ([9746fcf](https://github.com/ChengleiYuan/mcp-oauth2-proxy/commit/9746fcfb5b4fc41fcffede89431559196e7ebfd4))
+
 ## [0.2.0](https://github.com/ChengleiYuan/mcp-oauth2-proxy/compare/v0.1.12...v0.2.0) (2026-08-15)
 
 
